@@ -4,5 +4,11 @@
     <string name="app_name">Lyrae</string>
     <string name="action_settings">Settings</string>
     <string name="hello_world">Hello world!</string>
+    <string name="app_id">1384252801824336</string>
+    <string name="get_started">To get started, log in using Facebook</string>
+    <string name="settings">Settings</string>
+    <string name="button_send">MATCH!!</string>
+    <string name="display">DisplayFragment</string>
+    <string name="displaymessage">My Message</string>
 
 </resources>
