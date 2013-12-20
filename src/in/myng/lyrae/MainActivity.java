@@ -1,8 +1,29 @@
 package in.myng.lyrae;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.Map.Entry;
+
+import org.apache.http.HttpEntity;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.HttpResponse;
+
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
+import android.os.StrictMode;
+import android.annotation.SuppressLint;
+import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.Intent;
+import android.util.Log;
 import android.view.*;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -11,9 +32,13 @@ import android.widget.TextView;
 
 import com.facebook.*;
 import com.facebook.model.*;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.MarkerOptions;
 
 import android.support.v4.app.*;
 
+@SuppressLint("NewApi")
 public class MainActivity extends FragmentActivity
 {
 
@@ -29,9 +54,14 @@ public class MainActivity extends FragmentActivity
 	
 	public final static String EXTRA_MESSAGE = "in.myng.lyrae.MESSAGE";
 	private String message = "null";
+	static Intent intent;
+	
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 	    super.onCreate(savedInstanceState);
+	    intent = new Intent(this, DisplayFragment.class);
+	    StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
+	    StrictMode.setThreadPolicy(policy);
 	    
 	    uiHelper = new UiLifecycleHelper(this, callback);
 	    uiHelper.onCreate(savedInstanceState);
@@ -213,11 +243,50 @@ public class MainActivity extends FragmentActivity
 	    return false;
 	}
 	
+//	private static String convertStreamToString(InputStream is) {
+//	    /*
+//	     * To convert the InputStream to String we use the BufferedReader.readLine()
+//	     * method. We iterate until the BufferedReader return null which means
+//	     * there's no more data to read. Each line will appended to a StringBuilder
+//	     * and returned as String.
+//	     */
+//	    BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+//	    StringBuilder sb = new StringBuilder();
+//
+//	    String line = null;
+//	    try {
+//	        while ((line = reader.readLine()) != null) {
+//	            sb.append(line + "\n");
+//	        }
+//	    } catch (IOException e) {
+//	        e.printStackTrace();
+//	    } finally {
+//	        try {
+//	            is.close();
+//	        } catch (IOException e) {
+//	            e.printStackTrace();
+//	        }
+//	    }
+//	    return sb.toString();
+//	}
+	
 	/** Called when the user clicks the Send button */
 	public void sendMessage(View view) 
 	{
-		final Intent intent = new Intent(this, DisplayFragment.class);
+		//final Intent intent = new Intent(this, DisplayFragment.class);
 		final Session session = Session.getActiveSession();
+
+	    // Prepare a request object
+	    String url="http://www.google.com";
+
+	    // Execute the request
+	    HttpResponse httpresponse;
+	    try {
+	    	LoginHttpGet loginHttpGet = new LoginHttpGet();
+	    	loginHttpGet.execute(url);
+	    } catch (Exception e) {
+	    	Log.e("Httperror",Log.getStackTraceString(e));
+	    }
 		
 	    if (session != null && session.isOpened()) 
 	    {
@@ -235,7 +304,7 @@ public class MainActivity extends FragmentActivity
 		                {
 		                	message = message+" "+user.getId()+" "+ user.getName();
 		                	intent.putExtra(EXTRA_MESSAGE, message);
-		            	    startActivity(intent);
+		            	    //startActivity(intent);
 		                }
 		            }
 		            if (response.getError() != null) {
@@ -245,5 +314,12 @@ public class MainActivity extends FragmentActivity
 		    });
 		    request.executeAsync();
 	    }
+	}
+	public class LoginHttpGet extends AsyncHttpGet {
+		@Override
+		public void customMethod(String result) {
+			intent.putExtra(EXTRA_MESSAGE, result);
+	    	startActivity(intent);
+		}
 	}
 }

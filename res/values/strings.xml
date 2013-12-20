@@ -10,5 +10,6 @@
     <string name="button_send">MATCH!!</string>
     <string name="display">DisplayFragment</string>
     <string name="displaymessage">My Message</string>
+    <string name="to_map">Map</string>
 
 </resources>
