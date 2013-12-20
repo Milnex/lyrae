@@ -1,9 +1,11 @@
 package in.myng.lyrae;
+import data.JsonUser;
 import android.location.Location;
 
 public class LocationData {
 	private static final LocationData INSTANCE = new LocationData();
 	private static Location currLocation = null;
+
 	private LocationData(){}
 
 	public Location getCurrLocation() {

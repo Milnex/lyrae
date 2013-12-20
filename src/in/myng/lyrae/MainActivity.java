@@ -69,6 +69,9 @@ public class MainActivity extends FragmentActivity
 	private boolean isResumed = false;
 	
 	public final static String EXTRA_MESSAGE = "in.myng.lyrae.MESSAGE";
+	public final static String GROUP_MESSAGE = "in.myng.lyrae.GROUPMESSAGE";
+	public final static String UID_MESSAGE = "in.myng.lyrae.UIDMESSAGE";
+	public final static String NAME_MESSAGE = "in.myng.lyrae.NAMEMESSAGE";
 	static Intent intent;
 	static LocationManager locationManager = null;
 	static LocationListener locationListener = null;
@@ -80,7 +83,7 @@ public class MainActivity extends FragmentActivity
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 	    super.onCreate(savedInstanceState);
-	    intent = new Intent(this, DisplayFragment.class);
+	    intent = new Intent(this, MapActivity.class);
 	    StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
 	    StrictMode.setThreadPolicy(policy);
 	    
@@ -312,8 +315,10 @@ public class MainActivity extends FragmentActivity
 		            {
 		                if (user != null) 
 		                {
-		                	curUser.id=user.getId();
+		                	curUser.uid=user.getId();
 		                	curUser.name=user.getName();
+		                	Thread createUserThread = new Thread(new CreateUserThread());
+		                	createUserThread.start();
 		                	//message = message+" "+user.getId()+" "+ user.getName();
 		                }
 		            }
@@ -324,11 +329,12 @@ public class MainActivity extends FragmentActivity
 		    });
 		    request.executeAsync();
 	    }
-	    String message = "tt";
-    	intent.putExtra(EXTRA_MESSAGE, message);
-    	Thread thread = new Thread(new UpdateUserThread());
-    	thread.start();
-	    startActivity(intent);
+    	Thread matchThread = new Thread(new UpdateUserThread());
+    	matchThread.start();
+    	Thread getGroupThread = new Thread(new GetGroupThread());
+    	getGroupThread.start();
+//    	Intent intent = new Intent(getApplicationContext(),MapActivity.class);
+//	    startActivity(intent);
 	}
 	
 	private void startLocationListener() {
@@ -350,8 +356,9 @@ public class MainActivity extends FragmentActivity
 	            }
 		      	try {
 		      		HttpClient client = new DefaultHttpClient();
-		      		if(curUser.id != null){
-		      			HttpPost post = new HttpPost(url+"/user/"+curUser.id);
+		      		if(curUser.uid != null)
+		      		{
+		      			HttpPost post = new HttpPost(url+"/user/"+curUser.uid);
 //		      			Log.e("id",curUser.id);
 			      		List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>();
 			      		nameValuePairs.add(new BasicNameValuePair("latitude", String.valueOf(locationData.getCurrLocation().getLatitude())));
@@ -438,14 +445,46 @@ public class MainActivity extends FragmentActivity
       return provider1.equals(provider2);
   }
   
+  class CreateUserThread implements Runnable {   
+      public void run() {
+    	  HttpClient client = new DefaultHttpClient();
+    	  if(curUser.uid==null)
+    		  return;
+    	  HttpPost post = new HttpPost(url+"/user/");
+    	  try {
+    		List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>();
+			nameValuePairs.add(new BasicNameValuePair("uid", String.valueOf(curUser.uid)));
+			nameValuePairs.add(new BasicNameValuePair("name", String.valueOf(curUser.name)));
+			post.setEntity(new UrlEncodedFormEntity(nameValuePairs));
+			
+			HttpResponse response = client.execute(post);
+			BufferedReader rd = new BufferedReader(new InputStreamReader(
+					response.getEntity().getContent()));
+			String line = "";
+			String result = "";
+			while ((line = rd.readLine()) != null) {
+				result += line;
+				System.out.println(line);
+			}
+			//Log.e("T_User",result);			
+
+		  } catch (IOException e) {
+				e.printStackTrace();
+		  }
+      }   
+  }
+  
   class UpdateUserThread implements Runnable {   
       public void run() {
     	  HttpClient client = new DefaultHttpClient();
-    	  HttpPost post = new HttpPost(url+"/user/"+curUser.id);
+    	  if(curUser.uid==null)
+    		  return;
+    	  HttpPost post = new HttpPost(url+"/user/"+curUser.uid);
     	  try {
     		List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>();
 			nameValuePairs.add(new BasicNameValuePair("latitude", String.valueOf(locationData.getCurrLocation().getLatitude())));
 			nameValuePairs.add(new BasicNameValuePair("longitude", String.valueOf(locationData.getCurrLocation().getLongitude())));
+			nameValuePairs.add(new BasicNameValuePair("matching", "true"));
 			nameValuePairs.add(new BasicNameValuePair("activity", curUser.activity));
 			post.setEntity(new UrlEncodedFormEntity(nameValuePairs));
 			
@@ -458,11 +497,67 @@ public class MainActivity extends FragmentActivity
 				result += line;
 				System.out.println(line);
 			}
-			Log.e("T_User",result);
+			//Log.e("T_User",result);			
 
 		  } catch (IOException e) {
 				e.printStackTrace();
 		  }
       }   
-  }  
+  }
+  
+  class GetGroupThread implements Runnable {
+		Intent intent = new Intent(getApplicationContext(),MapActivity.class);
+		
+		public void run() {
+			HttpClient client = new DefaultHttpClient();
+			boolean flag = true;
+			while(flag){
+				if(curUser.uid==null){
+					try {
+						Thread.sleep(5000);
+					} catch (InterruptedException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				}
+				HttpGet get = new HttpGet(url + "/match/" + curUser.uid);
+				try {
+					HttpResponse response = client.execute(get);
+					BufferedReader rd = new BufferedReader(new InputStreamReader(
+							response.getEntity().getContent()));
+					String line = "";
+					String result = "";
+					while ((line = rd.readLine()) != null) {
+						result += line;
+						System.out.println(line);
+					}
+					Log.e("T_Group",result);
+					Gson gson = new Gson();
+					JsonUser guser = gson.fromJson(result, JsonUser.class);
+						
+						if (guser.gid != null && !guser.gid.equals(""))
+						{
+							flag=false;
+							intent.putExtra(UID_MESSAGE, curUser.uid);
+							intent.putExtra(GROUP_MESSAGE, guser.gid);
+							intent.putExtra(NAME_MESSAGE, guser.name);
+							startActivity(intent);
+						}
+						else
+						{
+							//Log.e("T_Group","Not match");
+						}
+					try {
+						Thread.sleep(5000);
+					} catch (InterruptedException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+			
+		}
+  }
 }
