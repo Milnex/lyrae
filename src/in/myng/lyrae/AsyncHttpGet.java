@@ -41,6 +41,7 @@ public abstract class AsyncHttpGet extends AsyncTask<String, Void, String> {
         } catch (IOException e) {
             e.printStackTrace();
         }
+        
 
         return retorno; // This value will be returned to your onPostExecute(result) method
     }

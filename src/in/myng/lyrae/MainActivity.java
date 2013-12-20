@@ -4,16 +4,27 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 
 import org.apache.http.HttpEntity;
+import org.apache.http.NameValuePair;
 import org.apache.http.client.HttpClient;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
 import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.HttpResponse;
 
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -22,6 +33,7 @@ import android.os.StrictMode;
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.util.Log;
 import android.view.*;
@@ -35,6 +47,10 @@ import com.facebook.model.*;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+
+import data.JsonUser;
 
 import android.support.v4.app.*;
 
@@ -53,8 +69,13 @@ public class MainActivity extends FragmentActivity
 	private boolean isResumed = false;
 	
 	public final static String EXTRA_MESSAGE = "in.myng.lyrae.MESSAGE";
-	private String message = "null";
 	static Intent intent;
+	static LocationManager locationManager = null;
+	static LocationListener locationListener = null;
+	static LocationData locationData = LocationData.getInstance();
+	static JsonUser curUser = new JsonUser();
+	private static final int HF_MINUTES = 1000 * 30;
+	String url = "http://ec2-54-204-122-234.compute-1.amazonaws.com:3000";
 	
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
@@ -77,11 +98,11 @@ public class MainActivity extends FragmentActivity
 	    {
 	    	public void onItemSelected(AdapterView adapterView, View view, int position, long id)
 	    	{
-	    		message = adapterView.getSelectedItem().toString();
+	    		curUser.activity = adapterView.getSelectedItem().toString();
 	    	}
 	    	public void onNothingSelected(AdapterView arg0) 
 	    	{
-	    		message = arg0.getSelectedItem().toString();
+	    		curUser.activity = arg0.getSelectedItem().toString();
 	    	}
 	    });
 	    ///////////////////////////////////////////////////////////////
@@ -97,6 +118,7 @@ public class MainActivity extends FragmentActivity
 	        transaction.hide(fragments[i]);
 	    }
 	    transaction.commit();
+	    startLocationListener();
 	}
 	
 	private void showFragment(int fragmentIndex, boolean addToBackStack) 
@@ -275,18 +297,6 @@ public class MainActivity extends FragmentActivity
 	{
 		//final Intent intent = new Intent(this, DisplayFragment.class);
 		final Session session = Session.getActiveSession();
-
-	    // Prepare a request object
-	    String url="http://www.google.com";
-
-	    // Execute the request
-	    HttpResponse httpresponse;
-	    try {
-	    	LoginHttpGet loginHttpGet = new LoginHttpGet();
-	    	loginHttpGet.execute(url);
-	    } catch (Exception e) {
-	    	Log.e("Httperror",Log.getStackTraceString(e));
-	    }
 		
 	    if (session != null && session.isOpened()) 
 	    {
@@ -302,9 +312,9 @@ public class MainActivity extends FragmentActivity
 		            {
 		                if (user != null) 
 		                {
-		                	message = message+" "+user.getId()+" "+ user.getName();
-		                	intent.putExtra(EXTRA_MESSAGE, message);
-		            	    //startActivity(intent);
+		                	curUser.id=user.getId();
+		                	curUser.name=user.getName();
+		                	//message = message+" "+user.getId()+" "+ user.getName();
 		                }
 		            }
 		            if (response.getError() != null) {
@@ -314,12 +324,145 @@ public class MainActivity extends FragmentActivity
 		    });
 		    request.executeAsync();
 	    }
+	    String message = "tt";
+    	intent.putExtra(EXTRA_MESSAGE, message);
+    	Thread thread = new Thread(new UpdateUserThread());
+    	thread.start();
+	    startActivity(intent);
 	}
-	public class LoginHttpGet extends AsyncHttpGet {
-		@Override
-		public void customMethod(String result) {
-			intent.putExtra(EXTRA_MESSAGE, result);
-	    	startActivity(intent);
-		}
+	
+	private void startLocationListener() {
+	    // Get the location manager
+	    locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
+	    locationListener = new LocationListener() {
+	        public void onLocationChanged(Location location) {
+	            // Called when a new location is found by the network location provider.
+	            if(locationData.getCurrLocation() != null)
+	            {
+	                boolean better = isBetterLocation(location, locationData.getCurrLocation());
+	                if(better) {
+	                	locationData.getCurrLocation().set(location);
+	                }
+	            }
+	            else
+	            {
+	                locationData.setCurrLocation(location);
+	            }
+		      	try {
+		      		HttpClient client = new DefaultHttpClient();
+		      		if(curUser.id != null){
+		      			HttpPost post = new HttpPost(url+"/user/"+curUser.id);
+//		      			Log.e("id",curUser.id);
+			      		List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>();
+			      		nameValuePairs.add(new BasicNameValuePair("latitude", String.valueOf(locationData.getCurrLocation().getLatitude())));
+			      		nameValuePairs.add(new BasicNameValuePair("longitude", String.valueOf(locationData.getCurrLocation().getLongitude())));
+			      		post.setEntity(new UrlEncodedFormEntity(nameValuePairs));
+			      		
+			      		HttpResponse response = client.execute(post);
+			      		BufferedReader rd = new BufferedReader(new InputStreamReader(
+			      				response.getEntity().getContent()));
+			      		String line = "";
+			      		String result = "";
+			      		while ((line = rd.readLine()) != null) {
+			      			result += line;
+			      			System.out.println(line);
+			      		}
+			      		Log.e("T_LOCATION",result);
+		      		}
+		      	} catch (IOException e) {
+	      			e.printStackTrace();
+		      	}
+	        }
+
+	        public void onStatusChanged(String provider, int status, Bundle extras) {}
+
+	        public void onProviderEnabled(String provider) {}
+
+	        public void onProviderDisabled(String provider) {}
+	    };
+	    locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 5000, 0, locationListener);
+	    locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 5000, 0, locationListener);
 	}
+  
+  /** Determines whether one Location reading is better than the current Location fix
+    * @param location  The new Location that you want to evaluate
+    * @param currentBestLocation  The current Location fix, to which you want to compare the new one
+    */
+  protected boolean isBetterLocation(Location location, Location currentBestLocation) {
+      if (currentBestLocation == null) {
+          // A new location is always better than no location
+          return true;
+      }
+
+      // Check whether the new location fix is newer or older
+      long timeDelta = location.getTime() - currentBestLocation.getTime();
+      boolean isSignificantlyNewer = timeDelta > HF_MINUTES;
+      boolean isSignificantlyOlder = timeDelta < -HF_MINUTES;
+      boolean isNewer = timeDelta > 0;
+
+      // If it's been more than two minutes since the current location, use the new location
+      // because the user has likely moved
+      if (isSignificantlyNewer) {
+          return true;
+      // If the new location is more than two minutes older, it must be worse
+      } else if (isSignificantlyOlder) {
+          return false;
+      }
+
+      // Check whether the new location fix is more or less accurate
+      int accuracyDelta = (int) (location.getAccuracy() - currentBestLocation.getAccuracy());
+      boolean isLessAccurate = accuracyDelta > 0;
+      boolean isMoreAccurate = accuracyDelta < 0;
+      boolean isSignificantlyLessAccurate = accuracyDelta > 200;
+
+      // Check if the old and new location are from the same provider
+      boolean isFromSameProvider = isSameProvider(location.getProvider(),
+              currentBestLocation.getProvider());
+
+      // Determine location quality using a combination of timeliness and accuracy
+      if (isMoreAccurate) {
+          return true;
+      } else if (isNewer && !isLessAccurate) {
+          return true;
+      } else if (isNewer && !isSignificantlyLessAccurate && isFromSameProvider) {
+          return true;
+      }
+      return false;
+  }
+
+  /** Checks whether two providers are the same */
+  private boolean isSameProvider(String provider1, String provider2) {
+      if (provider1 == null) {
+        return provider2 == null;
+      }
+      return provider1.equals(provider2);
+  }
+  
+  class UpdateUserThread implements Runnable {   
+      public void run() {
+    	  HttpClient client = new DefaultHttpClient();
+    	  HttpPost post = new HttpPost(url+"/user/"+curUser.id);
+    	  try {
+    		List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>();
+			nameValuePairs.add(new BasicNameValuePair("latitude", String.valueOf(locationData.getCurrLocation().getLatitude())));
+			nameValuePairs.add(new BasicNameValuePair("longitude", String.valueOf(locationData.getCurrLocation().getLongitude())));
+			nameValuePairs.add(new BasicNameValuePair("activity", curUser.activity));
+			post.setEntity(new UrlEncodedFormEntity(nameValuePairs));
+			
+			HttpResponse response = client.execute(post);
+			BufferedReader rd = new BufferedReader(new InputStreamReader(
+					response.getEntity().getContent()));
+			String line = "";
+			String result = "";
+			while ((line = rd.readLine()) != null) {
+				result += line;
+				System.out.println(line);
+			}
+			Log.e("T_User",result);
+
+		  } catch (IOException e) {
+				e.printStackTrace();
+		  }
+      }   
+  }  
 }
